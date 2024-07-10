@@ -1,0 +1,41 @@
+html, body {
+    padding: 0;
+    margin: 0;
+    font-size: 0;
+}
+
+[data-selectable] {
+    display: inline-block;
+    width: 31.33%;
+    height: 31.33vh;
+    margin: 1vh 0 0 1%;
+    font-size: 16px;
+    background-color: #A7B3C2;
+    user-select: none;
+    
+    &.selected {
+        background-color: #6B7B8F;
+    }
+}
+
+.dragging {
+    // disable text selection, set cursor
+    &, * {
+        user-select: none;
+        cursor: default;
+    }
+}
+
+svg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    will-change: transform;
+}
+
+rect {
+    fill: rgba(#000, 0.15);
+    stroke-width: 2;
+    stroke: rgba(#000, 0.85);
+    opacity: 0.35;
+}

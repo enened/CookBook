@@ -1,0 +1,35 @@
+{
+  "name": "selectable",
+  "version": "0.1.0",
+  "description": "Turn anything into a selectable. Uses a an OS style drag box to select/deselect items.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/souporserious/selectable"
+  },
+  "keywords": [
+    "selectable",
+    "checkbox",
+    "os-style"
+  ],
+  "author": "Travis Arnold <travis@souporserious.com> (http://souporserious.com)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/souporserious/selectable/issues"
+  },
+  "homepage": "https://github.com/souporserious/selectable",
+  "devDependencies": {
+    "autoprefixer-core": "^5.1.8",
+    "browser-sync": "^2.5.2",
+    "chai": "^2.2.0",
+    "es6-promise": "^2.0.1",
+    "gulp": "^3.8.11",
+    "gulp-babel": "^4.0.1",
+    "gulp-postcss": "^5.0.0",
+    "gulp-sass": "^1.3.3",
+    "mocha": "^2.2.1"
+  }
+}
