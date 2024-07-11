@@ -56,6 +56,7 @@ function RecipeForm(){
     useEffect(()=>{
         if (!user.userId){
             checkLoggedIn(setUser).then((response)=>{
+                console.log(response)
                 if (!response){
                     navigate("/")
                 }

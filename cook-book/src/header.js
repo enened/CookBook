@@ -15,14 +15,13 @@ function Header(){
         })
     }
 
-
     return(
         <>
             <div className="header">
                 <h1 className='headerH1' onClick={()=>{navigate("/myRecipes")}}>CookbookAI</h1>
 
                 <div>
-                    {!user ? (currentUrl == "/" ? <button onClick={()=>{navigate("/signUp")}}>Signup</button> :  <button onClick={()=>{navigate("/")}}>Login</button>)
+                    {!user.userId ? (currentUrl == "/" ? <button onClick={()=>{navigate("/signUp")}}>Signup</button> :  <button onClick={()=>{navigate("/")}}>Login</button>)
                     :
                     <>
                         <button style={{"margin":"5px"}} onClick={()=>{navigate("/profile")}}>Profile</button>

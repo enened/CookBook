@@ -1,6 +1,6 @@
 const express = require("express");
 const app = express();
-const mysql = require('mysql');
+const mysql = require('mysql2');
 const cors = require('cors');
 const bodyParser = require('body-parser')
 const session = require("express-session");
@@ -42,6 +42,8 @@ app.post("/login", (req, res)=>{
 
   if (!req.body.googleLogin){
     db.query("select * from login where binary username = ? and password is not null", [username, password], (err, result) => {
+      if(err){console.log(err)}
+
       if (result.length > 0){
   
         bcrypt.compare(password, result[0].password, (err, response)=>{

@@ -19,7 +19,7 @@ function MyRecipes(){
                     navigate("/")
                 }
                 else{
-                    Axios.post("http://localhost:30015/getRecipes", {userId: user.userId}).then((response) =>{
+                    Axios.post("http://localhost:30015/getRecipes", {userId: response.userId}).then((response) =>{
                         setRecipes(response.data.recipes);
                         setCurrentRecipes(response.data.recipes);
                     })
@@ -33,6 +33,7 @@ function MyRecipes(){
             })
         }
     }, [])
+
 
     useEffect(()=>{
         for (let x = currentRecipes.length - 1; x > -1; x--) {

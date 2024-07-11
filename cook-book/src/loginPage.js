@@ -66,9 +66,9 @@ function LoginPage(){
 
         <form onSubmit={login}>
             <h2>Login</h2>
-            <input type = "text"  onChange={(e)=>{setUsername(e.target.value)}} required placeholder="Username"/>
+            <input type = "text"  maxLength={250}  onChange={(e)=>{setUsername(e.target.value)}} required placeholder="Username"/>
             <br/>
-            <input type = "password" onChange={(e)=>{setPassword(e.target.value)}} required  placeholder="Password"/>
+            <input type = "password"  maxLength={100} onChange={(e)=>{setPassword(e.target.value)}} required  placeholder="Password"/>
             <br/>
             <button type = "submit">Login</button>
 

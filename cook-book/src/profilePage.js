@@ -14,7 +14,7 @@ function ProfilePage(){
     const [confirmNewPass, setConfirmNewPass] = useState();
     const [display, setDisplay] = useState({});
 
-    const getUserInfo = ()=>{
+    const getUserInfo = (user)=>{
         Axios.post("http://localhost:30015/getUserInfo", {userId: user.userId}).then((response)=>{
             setDisplay({value: response.data.userInfo.display, label: response.data.userInfo.display.charAt(0).toUpperCase() + response.data.userInfo.display.slice(1) + " mode"});
         })
@@ -27,12 +27,12 @@ function ProfilePage(){
                     navigate("/")
                 }
                 else{
-                    getUserInfo()
+                    getUserInfo(response)
                 }
             })  
         }
         else{
-            getUserInfo()
+            getUserInfo(user)
         }
     }, [])
 
