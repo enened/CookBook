@@ -1,5 +1,5 @@
 import  Axios  from 'axios';
-import DeleteButton from "./deleteButton.jpg";
+import DeleteButton from "./deleteButton.png";
 
 function Ingredient({item, index, setIngredients, viewOnly, setDeletedIngredients}){
   Axios.defaults.withCredentials = true;

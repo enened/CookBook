@@ -179,7 +179,7 @@ table{
 
 .filterButton{
   position: absolute;
-  top: 14%;
+  top: 25%;
   right: 4%;
 }
 
@@ -233,7 +233,7 @@ table{
 /* styles for dark mode */
 
 .dark{
-  background-color: rgb(14, 26, 14);
+  background-color: black;
   height: 100%;
   min-height: 100vh;
   width:100%;
@@ -241,25 +241,50 @@ table{
   color: white;
   padding-bottom: 30px;
   padding-top: 30px;
+
+
+
+  .header{
+    margin: auto;
+    background-color: black;
+    border: 1px solid rgb(57, 133, 100);
+  }
+
+  button{
+    background-color: black;
+    box-shadow: none;
+    border: 1px solid rgb(57, 133, 100);
+  }
+
+  .dropdown{
+    color: black
+  }
+
+  .squareSlide, .smallSlide, .smallSlideDark, .ingredientSlide, .bigSlideOutline, th, td{
+    background-color: black;
+    border: 1px solid rgb(57, 133, 100);
+  }
+
+  .activeTab{
+    background-color: rgb(184, 218, 203);
+    color: black
+  }
+
 }
 
-.dark .header{
-  margin: auto;
+.smallSlideDark{
+  background-color: black;
+  border: 1px solid rgb(57, 133, 100);
+  border-radius: 5px;
+  padding: 10px;
+  width: 300px;
+  color: white;
 }
 
-.dark button{
-  background-color: rgb(73, 156, 120);
-  box-shadow: none;
+.smallSlideDark button{
+  background-color: black;
+  border: 1px solid rgb(57, 133, 100);
 }
 
-.dark .dropdown{
-  color: black
-}
 
-.dark .squareSlide{
-  background-color: rgb(49, 114, 86);
-}
 
-.dark .activeTab{
-  background-color: rgb(82, 191, 144);
-}

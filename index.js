@@ -9,8 +9,9 @@ const axios = require("axios");
 const util = require('util');
 const bcrypt = require("bcrypt");
 const saltRounds = 5;
-const Xray = require('x-ray');
-const x = Xray()
+
+const OpenAI  = require('openai');
+const openai = new OpenAI({apiKey: "",});
 
 
 // database connection
@@ -289,20 +290,20 @@ app.post("/editRecipe", (req, res)=>{
 
 // search for recipes matching query
 app.post("/getSearchResults", (req, res)=>{
-  const userId = req.body.userId;
+  // const userId = req.body.userId;
   const query = req.body.query;
 
   // search recipes table 
-  db.query(`select * from recipes where userId = ? and ((instr(?, notes) > 0 or instr(notes, ?) > 0) and notes != "" or instr(?, name) > 0 or instr(name, ?) > 0 or 
+  db.query(`select * from recipes where ((instr(?, notes) > 0 or instr(notes, ?) > 0) and notes != "" or instr(?, name) > 0 or instr(name, ?) > 0 or 
     instr(?, convert(duration, char)) > 0 or instr(convert(duration, char), ?) > 0 or instr(?, cuisine) > 0 or instr(cuisine, ?) > 0 ) 
-    order by recipeId asc`, [userId, query, query, query, query, query, query,  query, query], async (err, result1) => {
+    order by recipeId asc`, [query, query, query, query, query, query,  query, query], async (err, result1) => {
     if (err){console.log(err)}
 
     else{
       // search ingredients table
-      db.query(`select distinct recipes.*, count(ingredients.ingredientId) from recipes inner join ingredients on recipes.recipeId = ingredients.recipeId where recipes.userId = ? and 
+      db.query(`select distinct recipes.*, count(ingredients.ingredientId) from recipes inner join ingredients on recipes.recipeId = ingredients.recipeId where 
         ((instr(?, ingredients.notes) > 0 or instr(ingredients.notes, ?) > 0) and ingredients.notes != "" or instr(?, ingredients.ingredientName) > 0 or instr(ingredients.ingredientName, ?) > 0)  
-        group by recipes.recipeId order by recipes.recipeId asc`, [userId, query, query, query, query], async (err, result2) => {
+        group by recipes.recipeId order by recipes.recipeId asc`, [query, query, query, query], async (err, result2) => {
         if (err){console.log(err)}
 
         else{
@@ -375,18 +376,210 @@ app.post("/deleteRecipe", (req, res)=>{
 })
 
 // scrape website for recipe
-app.post("/scrapeWebsite", (req, res)=>{
+app.post("/scrapeWebsite", async (req, res)=>{
   const recipeLink = req.body.recipeLink;
+  let tries = 0;
+  
+  while (true){
+    console.log(tries)
+    tries += 1;
+    if (tries == 5){
+      res.send({"error":"Error generating recipe, please try again later"});
+      break;
+    }
+    try{
+      let jsonGood = true;
+      // get recipe info from website
+      const content = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{role: "system", content: `Search a website for recipe info and return the info in the JSON format {name: max 100 characters, duration: int minutes, cuisine: 
+        max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
+        unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}]}}, 
+        all keys should be the same as example and be valid JSON, no fractions. If there is no recipe info in the website, return the error message in the JSON format 
+        {error: shortErrorMessage}. Only ever give JSON and use the exact same keys as the example (case-sensitive)`}, 
+        {role: "user", content: `Give recipe information from ${recipeLink}`}],
+      });
 
-  x(recipeLink, {div: ['div'], article: ["article"], main: ["main"]})((err, result) => {
-    let divCount = 0;
-    let articleCount = 0;
-    let mainCount = 0;
-    // check if any nested content (like divs) and remove it 
-    result.div.forEach(div => {divCount += div.length});
-    result.article.forEach(article => {articleCount += article.length});
-    result.main.forEach(main => {mainCount += main.length});
+      // check if all the proper keys are present
+      let jsonContent = JSON.parse(content.choices[0].message.content);
+      console.log(jsonContent)
+      if (!jsonContent.error && !jsonContent.Error){
 
-    console.log("Div: " + divCount + " Article: " + articleCount + " Main: " + mainCount)
-  });
+        if (!jsonContent.name){
+          if(jsonContent.Name){
+            jsonContent.name = jsonContent.Name;
+          }
+          else{
+            console.log("name")
+            continue;
+          }
+        }
+
+        if (!jsonContent.ingredients){
+          if(jsonContent.Ingredients){
+            jsonContent.ingredients = jsonContent.Ingredients;
+          }
+          else{
+            console.log("ingredients")
+            continue;
+          }
+        }
+
+        if (!jsonContent.instructions){
+          if(jsonContent.Instructions){
+            jsonContent.instructions = jsonContent.Instructions;
+          }
+          else{
+            console.log("instructions")
+            continue;
+          }
+        }
+
+        for (let i = 0; i < jsonContent.ingredients.length; i++) {
+          if (!jsonContent.ingredients[i].ingredientName){
+            if(jsonContent.ingredients[i].IngredientName){
+              jsonContent.ingredients[i].ingredientName = jsonContent.ingredients[i].IngredientName;
+            }
+            else{
+              console.log("ingredients ingredientName")
+              jsonGood = false;
+            }
+          }
+        }
+
+        for (let i = 0; i < jsonContent.instructions.length; i++) {
+          if (!jsonContent.instructions[i].instruction){
+            if(jsonContent.ingredients[i].Instruction){
+              jsonContent.ingredients[i].instruction = jsonContent.ingredients[i].Instruction;
+            }
+            else{
+              console.log("instructions instruction")
+              jsonGood = false;
+            }
+          }
+        }
+      }
+
+      else if(jsonContent.Error){
+        jsonContent.error = jsonContent.Error;
+      }
+      else if(!jsonContent.error){
+        console.log("error error")
+        continue;
+      }
+
+      // convert to json and send to front end
+      if(jsonGood){
+        res.send({recipe: jsonContent});
+        break;
+      }
+    }
+    catch (error){console.log(error);}
+  }
+})
+
+// scrape website for recipe
+app.post("/generateRecipe", async (req, res)=>{
+  const generatedRecipeQuery = req.body.generatedRecipeQuery;
+  const currRecipe = req.body.currRecipe;
+  let tries = 0;
+
+  while (true){
+    console.log(tries)
+    tries += 1;
+    if (tries == 5){
+      res.send({"error":"Error generating recipe, please try again later"});
+      break;
+    }
+    try{
+      let jsonGood = true;
+      // generate recipe
+      console.log(`Generate a recipe ${"relating to " + generatedRecipeQuery} based on ${JSON.stringify(currRecipe)} \n`)
+      const content = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{role: "system", content: `Based on a JSON info of a recipe generate a recipe return in the
+        JSON format {name: max 100 characters, duration: int minutes, cuisine: max 100 characters, notes: optional max 2000 characters, 
+        ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , unit: max 50 characters, notes: max 1000 characters}], 
+        instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] REQUIRED, include all necessary instructions to make dish}}, 
+        all keys should be the same as example and be valid JSON, no fractions.  Only ever give JSON and use the exact same keys as the example (case-sensitive) and make
+        sure all fields are filled out and a proper new recipe is created with ingredients (can add more or remove), INSTRUCTIONS (REQUIRED), and other blank information`}, 
+        {role: "user", content: `Generate a recipe ${"relating to " + generatedRecipeQuery} based on ${JSON.stringify(currRecipe)}`}],
+      });
+
+      // check if all the proper keys are present
+      let jsonContent = JSON.parse(content.choices[0].message.content);
+      console.log(jsonContent)
+      if (!jsonContent.error && !jsonContent.Error){
+
+        if (!jsonContent.name){
+          if(jsonContent.Name){
+            jsonContent.name = jsonContent.Name;
+          }
+          else{
+            console.log("name")
+            continue;
+          }
+        }
+
+        if (!jsonContent.ingredients){
+          if(jsonContent.Ingredients){
+            jsonContent.ingredients = jsonContent.Ingredients;
+          }
+          else{
+            console.log("ingredients")
+            continue;
+          }
+        }
+
+        if (!jsonContent.instructions){
+          if(jsonContent.Instructions){
+            jsonContent.instructions = jsonContent.Instructions;
+          }
+          else{
+            console.log("instructions")
+            continue;
+          }
+        }
+
+        for (let i = 0; i < jsonContent.ingredients.length; i++) {
+          if (!jsonContent.ingredients[i].ingredientName){
+            if(jsonContent.ingredients[i].IngredientName){
+              jsonContent.ingredients[i].ingredientName = jsonContent.ingredients[i].IngredientName;
+            }
+            else{
+              console.log("ingredients ingredientName")
+              jsonGood = false;
+            }
+          }
+        }
+
+        for (let i = 0; i < jsonContent.instructions.length; i++) {
+          if (!jsonContent.instructions[i].instruction){
+            if(jsonContent.ingredients[i].Instruction){
+              jsonContent.ingredients[i].instruction = jsonContent.ingredients[i].Instruction;
+            }
+            else{
+              console.log("instructions instruction")
+              jsonGood = false;
+            }
+          }
+        }
+      }
+
+      else if(jsonContent.Error){
+        jsonContent.error = jsonContent.Error;
+      }
+      else if(!jsonContent.error){
+        console.log("error error")
+        continue;
+      }
+
+      // convert to json and send to front end
+      if(jsonGood){
+        res.send({recipe: jsonContent});
+        break;
+      }
+    }
+    catch (error){console.log(error);}
+  }
 })

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import DeleteButton from "./deleteButton.jpg";
+import DeleteButton from "./deleteButton.png";
 import Popup from 'reactjs-popup';
 import { useContext, useEffect, useState } from 'react';
 import {Context} from "./context.js";
@@ -57,16 +57,16 @@ function RecipeSlide({val, setRecipes, index}){
         <div className='squareSlide' onClick={()=>{navigate("/viewRecipe/" + val.recipeId)}}>
 
             <div style={{"width": "100%"}}>
-                <Popup  trigger={<img style={{"float": "right", "display":"inline"}} className='deleteButton' src = {DeleteButton} alt ='Remove recipe'/>} position={"bottom right"}>
+                {user.userId == val.userId && <Popup  trigger={<img style={{"float": "right", "display":"inline"}} className='deleteButton' src = {DeleteButton} alt ='Remove recipe'/>} position={"bottom right"}>
                     {close => (
-                        <div className='smallSlide'>
+                        <div className={user.display == "light" ? "smallSlide" : "smallSlideDark"}>
                             <p>Are you sure you want to delete this recipe?</p>
                             <button onClick={close}>No</button>
                             <button onClick={deleteRecipe}>Yes</button>
                         </div>
                     )}
-                </Popup>
-                <h3 style={{"display":"inline", "position":"relative", "left":"10px"}}>{val.name}</h3>
+                </Popup>}
+                <h3 style={user.userId == val.userId ? {"display":"inline", "position":"relative", "left": "10px" } : {}}>{val.name}</h3>
             </div>
             
             <p>Cuisine: {val.cuisine}</p>

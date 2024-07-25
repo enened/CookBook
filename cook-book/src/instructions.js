@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import  Axios  from 'axios';
-import DeleteButton from "./deleteButton.jpg";
+import DeleteButton from "./deleteButton.png";
 
 function Instructions({item, itemSelected, dragHandleProps, commonProps}){
   Axios.defaults.withCredentials = true;

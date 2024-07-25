@@ -22,6 +22,10 @@ function RecipeForm(){
     const [instructions, setInstructions] = useState([])
     const [deletedInstructions, setDeletedInstructions] = useState([])
     const [deletedIngredients, setDeletedIngredients] = useState([])
+    const [scrappingLoading, setScrappingLoading] = useState(false)
+    const [scrappingError, setScrappingError] = useState()
+    const [generatedRecipeQuery, setGeneratedRecipeQuery] = useState("")
+    const [generationLoading, setGenerationLoading] = useState(false)
 
     const getNoParamURL = ()=>{
         for (let i = 1; i < currentUrl.length; i++) {
@@ -140,26 +144,67 @@ function RecipeForm(){
 
     const scrapeWebsite = (e)=>{
         e.preventDefault();
+        setScrappingError()
+        setScrappingLoading(true);
         Axios.post("http://localhost:30015/scrapeWebsite", {recipeLink: recipeLink}).then((response)=>{
-            console.log(response)
+            setScrappingLoading(false);
+            if (response.data.recipe.error){
+                setScrappingError(response.data.recipe.error)
+            }
+            else{
+                setName(response.data.recipe.name);
+                setNotes(response.data.recipe.notes);
+                setDuration(response.data.recipe.duration);
+                setCuisine(response.data.recipe.cuisine);
+                setIngredients(response.data.recipe.ingredients);
+                setInstructions(response.data.recipe.instructions);
+            }
+        })    
+    }
+
+    const generateRecipe = (e)=>{
+        e.preventDefault();
+        setGenerationLoading(true);
+        Axios.post("http://localhost:30015/generateRecipe", {generatedRecipeQuery: generatedRecipeQuery, currRecipe: {name: name, notes: notes, duration: duration, cuisine: cuisine, ingredients: ingredients, instructions: instructions}}).then((response)=>{
+            setGenerationLoading(false);
+            setName(response.data.recipe.name);
+            setNotes(response.data.recipe.notes);
+            setDuration(response.data.recipe.duration);
+            setCuisine(response.data.recipe.cuisine);
+            setIngredients(response.data.recipe.ingredients);
+            setInstructions(response.data.recipe.instructions);
         })    
     }
 
     return(
       <>  
-        <h2>{name}</h2>
+
         {getNoParamURL() == "/createRecipe" && 
             <>
+                {/* Recipes from websites using input link */}
                 <form onSubmit={scrapeWebsite}>
-                    <p>Already have a recipe? Paste a link to it to scrape it!</p>
+                    <p>Already have a recipe? Paste a link to it to automatically fill out recipe info!</p>
                     <input type = "text" onChange={(e)=>{setRecipeLink(e.target.value)}} maxLength={1000} required placeholder="Recipe link" value={recipeLink}/>
                     <br/>
                     <button type='submit'>Scrape</button>
+                    {scrappingLoading && <p>...Loading info from website</p>}
+                    {scrappingError && <p>An error occured while gathering info: {scrappingError}</p>}
                     <br/>
+                </form>
+
+                <form onSubmit={generateRecipe}>
+                    {/* AI to  generate recipe */}
+                    <p>Need some help with your recipe? Just fill in any of the recipe fields below (ex. recipe name, ingredients, cuisine, etc) and use AI to automatically generate the rest!</p>
+                    <input type = "text" onChange={(e)=>{setGeneratedRecipeQuery(e.target.value.trim())}} maxLength={500} placeholder="Enter any other specific requests (optional)"/>
+                    <br/>
+                    <button>Generate recipe</button>
+                    {generationLoading && <p>...Generating recipe</p>}
                 </form>
             </>
         }
 
+        {/* All recipe info */}
+        <h2>{name}</h2>
         <form onSubmit={(e)=>{
                 e.preventDefault();
                 if (getNoParamURL() == "/editRecipe"){
@@ -173,7 +218,7 @@ function RecipeForm(){
             {/* Recipe general information */}
             <input type = "text" onChange={(e)=>{setName(e.target.value)}} maxLength={99} required placeholder="Recipe name" value={name}/>
             <br/>
-            <input type = "number" onChange={(e)=>{setDuration(e.target.value)}} required placeholder="Total time (in minutes)" value={duration}/>
+            <input type = "number" onChange={(e)=>{setDuration(e.target.value)}} min={1} required placeholder="Total time (in minutes)" value={duration}/>
             <br/>
             <input type = "text" onChange={(e)=>{setCuisine(e.target.value)}}  maxLength={99} required placeholder="Cuisine" value={cuisine}/>
             <br/>
