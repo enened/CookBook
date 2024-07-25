@@ -500,7 +500,7 @@ app.post("/generateRecipe", async (req, res)=>{
         messages: [{role: "system", content: `Based on a JSON info of a recipe generate a recipe return in the
         JSON format {name: max 100 characters, duration: int minutes, cuisine: max 100 characters, notes: optional max 2000 characters, 
         ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , unit: max 50 characters, notes: max 1000 characters}], 
-        instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] REQUIRED, include all necessary instructions to make dish}}, 
+        instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] REQUIRED, include all necessary instructions to make dish (detailed)}}, 
         all keys should be the same as example and be valid JSON, no fractions.  Only ever give JSON and use the exact same keys as the example (case-sensitive) and make
         sure all fields are filled out and a proper new recipe is created with ingredients (can add more or remove), INSTRUCTIONS (REQUIRED), and other blank information`}, 
         {role: "user", content: `Generate a recipe ${"relating to " + generatedRecipeQuery} based on ${JSON.stringify(currRecipe)}`}],

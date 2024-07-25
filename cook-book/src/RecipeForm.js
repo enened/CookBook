@@ -222,7 +222,7 @@ function RecipeForm(){
             <br/>
             <input type = "text" onChange={(e)=>{setCuisine(e.target.value)}}  maxLength={99} required placeholder="Cuisine" value={cuisine}/>
             <br/>
-            <textarea type = "text" onChange={(e)=>{setNotes(e.target.value)}} maxLength={1999} required placeholder="Recipe notes" value={notes}></textarea>
+            <textarea type = "text" onChange={(e)=>{setNotes(e.target.value)}} maxLength={1999} placeholder="Recipe notes" value={notes}></textarea>
             <br/>
 
             <div className='bigSlideOutline'>
