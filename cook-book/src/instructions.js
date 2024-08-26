@@ -46,7 +46,7 @@ function Instructions({item, itemSelected, dragHandleProps, commonProps}){
   if (commonProps.viewOnly){
     return(
       <tr>
-        <td>{item.step}. </td> 
+        <td>{item.step} </td> 
         <td>{item.instruction}</td> 
         <td>{item.notes ? item.notes : "N/A"}</td> 
       </tr>

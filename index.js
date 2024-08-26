@@ -9,10 +9,20 @@ const axios = require("axios");
 const util = require('util');
 const bcrypt = require("bcrypt");
 const saltRounds = 5;
+const multer = require('multer')
+const ytdl = require("@distube/ytdl-core");
+const fs = require('fs');
+const { Readable } = require('stream');
+const { unlink } = require('node:fs');
+// const { z } = require("zod");
+// const { zodResponseFormat } = require("openai/helpers/zod");
 
+const storage = multer.memoryStorage()
+const upload = multer({ storage: storage })
+const apiKey = ""        
 const OpenAI  = require('openai');
-const openai = new OpenAI({apiKey: "",});
-
+const openai = new OpenAI({apiKey: apiKey});
+let count = 0;
 
 // database connection
 const db = mysql.createConnection({
@@ -192,7 +202,6 @@ app.post("/createRecipe", (req, res)=>{
       }
 
       res.send("ok")
-
     }
   })
 })
@@ -289,43 +298,148 @@ app.post("/editRecipe", (req, res)=>{
 })
 
 // search for recipes matching query
-app.post("/getSearchResults", (req, res)=>{
+app.post("/getSearchResults", async (req, res)=>{
   // const userId = req.body.userId;
-  const query = req.body.query;
-
-  // search recipes table 
-  db.query(`select * from recipes where ((instr(?, notes) > 0 or instr(notes, ?) > 0) and notes != "" or instr(?, name) > 0 or instr(name, ?) > 0 or 
-    instr(?, convert(duration, char)) > 0 or instr(convert(duration, char), ?) > 0 or instr(?, cuisine) > 0 or instr(cuisine, ?) > 0 ) 
-    order by recipeId asc`, [query, query, query, query, query, query,  query, query], async (err, result1) => {
-    if (err){console.log(err)}
-
-    else{
-      // search ingredients table
-      db.query(`select distinct recipes.*, count(ingredients.ingredientId) from recipes inner join ingredients on recipes.recipeId = ingredients.recipeId where 
-        ((instr(?, ingredients.notes) > 0 or instr(ingredients.notes, ?) > 0) and ingredients.notes != "" or instr(?, ingredients.ingredientName) > 0 or instr(ingredients.ingredientName, ?) > 0)  
-        group by recipes.recipeId order by recipes.recipeId asc`, [query, query, query, query], async (err, result2) => {
-        if (err){console.log(err)}
-
-        else{
-          for (let i = 0; i < result2.length; i++) {
-            for (let y = 0; y < result1.length; y++) {
-              if (result1[y].recipeId == result2[i].recipeId){
-                break
-              }
-              if (result1[y].recipeId > result2[i].recipeId || y == result1.length - 1){
-                result1.push(result2[i])
-                break
-              }
-            }
-            if (result1.length == 0){
-              result1 = result2;
-            }
-          }
-          res.send({recipes: [...result1]});
-        }
-      })
+  const userQuery = req.body.query;
+  let keyWords = []
+  let searchResults = []
+  let tries = 0;
+  
+  // use AI to generate related key words to check database for
+  while (true){
+    console.log(tries)
+    tries += 1;
+    if (tries == 5){
+      console.log("Error generating key words")
+      break;
     }
-  })
+    try{
+      let jsonGood = true;
+      // generate keywords
+      console.log(`Generate keywords relating to ${userQuery}`)
+      const content = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{role: "system", content: `given a query, create an array of related key words related to foods, recipes, durations, ingredients
+         etc and return it in the JSON format {keyWords: [keyWords]}. Case sensitive and
+         response must be valid JSON using the exact same key as example. If it is a duration, return it in minutes. For example, if 1 hour as 60 minutes. `}, 
+        {role: "user", content: `Generate keywords relating to ${userQuery}`}],
+      });
+
+      // check if the proper key is present
+      let jsonContent = JSON.parse(content.choices[0].message.content);
+      console.log(jsonContent)
+
+      if (!jsonContent.keyWords){
+        if (!jsonContent.KeyWords){
+          if (!jsonContent.keywords){
+            jsonGood = false
+          }
+          else{
+            jsonContent.keyWords = jsonContent.keywords
+          }
+        }
+        else{
+          jsonContent.keyWords = jsonContent.KeyWords
+        }
+      }
+      
+      if(jsonGood){
+        keyWords = jsonContent.keyWords;
+        break;
+      }
+    }
+    catch (error){console.log(error);}
+  }
+  keyWords.push(userQuery)
+
+  // search database using query and AI generated related keywords
+  for (let k = 0; k < keyWords.length; k++) {
+
+    // search recipes table 
+    let result1 = await query(`select * from recipes where ((instr(?, notes) > 0 or instr(notes, ?) > 0) and notes != "" or instr(?, name) > 0 or instr(name, ?) > 0 or 
+    instr(?, convert(duration, char)) > 0 or instr(convert(duration, char), ?) > 0 or instr(?, cuisine) > 0 or instr(cuisine, ?) > 0 ) order by recipeId asc`, 
+    [keyWords[k], keyWords[k], keyWords[k], keyWords[k], keyWords[k], keyWords[k],  keyWords[k], keyWords[k]]);
+
+    // search ingredients table
+    let result2 = await query(`select distinct recipes.*, count(ingredients.ingredientId) from recipes inner join ingredients on recipes.recipeId = ingredients.recipeId where 
+    ((instr(?, ingredients.notes) > 0 or instr(ingredients.notes, ?) > 0) and ingredients.notes != "" or instr(?, ingredients.ingredientName) > 0 or instr(ingredients.ingredientName, ?) > 0)  
+    group by recipes.recipeId order by recipes.recipeId asc`, [keyWords[k], keyWords[k], keyWords[k], keyWords[k]])
+
+    // check for any duplicates in arrays and merge into one array
+    for (let i = 0; i < result2.length; i++) {
+      for (let y = 0; y < result1.length; y++) {
+        if (result1[y].recipeId == result2[i].recipeId){
+          break
+        }
+        if (result1[y].recipeId > result2[i].recipeId || y == result1.length - 1){
+          result1.push(result2[i])
+          break
+        }
+      }
+      if (result1.length == 0){
+        result1 = result2;
+      }
+    }
+
+    for (let i = 0; i < result1.length; i++) {
+      for (let y = 0; y < searchResults.length; y++) {
+        if (searchResults[y].recipeId == result1[i].recipeId){
+          break
+        }
+        if (searchResults[y].recipeId > result1[i].recipeId || y == searchResults.length - 1){
+          searchResults.splice(y, 0, result1[i])
+          break
+        }
+      }
+      if (searchResults.length == 0){
+        searchResults = result1;
+      }
+    }
+  }
+
+  // sort and filter results using AI
+  tries = 0;
+  while (true){
+    console.log(tries)
+    tries += 1;
+    if (tries == 5){
+      console.log("Error filtering search results")
+      break;
+    }
+    try{
+      let jsonGood = true;
+      
+      // filter search results
+      console.log(`Given the query ${userQuery} and the array ${searchResults}, return the most relevant elements sorted based on relevancy.`)
+      const content = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{role: "system", content: `Given a query and an array of recipes, return an array sorted based on how relevant it is to the query and remove elements 
+          that don't match the query in the JSON format {array: [...elements]}. Make sure to give PROPER JSON and follow the format. Also make sure the element info are the 
+          same as the input.`}, 
+        {role: "user", content: `Given the query ${userQuery} and the array ${JSON.stringify(searchResults)}, return the most relevant elements sorted based on relevancy.`}],
+      });
+
+      // check if the proper key is present
+      let jsonContent = JSON.parse(content.choices[0].message.content);
+      console.log(jsonContent)
+
+      if (!jsonContent.array){
+        if (!jsonContent.Array){
+          jsonGood = false
+        }
+        else{
+          jsonContent.array = jsonContent.Array
+        }
+      }
+      
+      // convert to json and send to front end
+      if(jsonGood){
+        res.send({recipes: jsonContent.array})
+        break;
+      }
+    }
+    catch (error){console.log(error);}
+  }
 })
 
 // get user info for profile using userId
@@ -395,8 +509,9 @@ app.post("/scrapeWebsite", async (req, res)=>{
         messages: [{role: "system", content: `Search a website for recipe info and return the info in the JSON format {name: max 100 characters, duration: int minutes, cuisine: 
         max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
         unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}]}}, 
-        all keys should be the same as example and be valid JSON, no fractions. If there is no recipe info in the website, return the error message in the JSON format 
-        {error: shortErrorMessage}. Only ever give JSON and use the exact same keys as the example (case-sensitive)`}, 
+        all keys should be the same as example and be valid JSON, no fractions. If there is no recipe info in the website, or you cannot get complete recipe 
+        information, return the error message in the JSON format {error: shortErrorMessage}. 
+        Only ever give JSON and use the exact same keys as the example (case-sensitive)`}, 
         {role: "user", content: `Give recipe information from ${recipeLink}`}],
       });
 
@@ -457,6 +572,16 @@ app.post("/scrapeWebsite", async (req, res)=>{
               jsonGood = false;
             }
           }
+
+          if (!jsonContent.instructions[i].step){
+            if(jsonContent.ingredients[i].Step){
+              jsonContent.ingredients[i].step = jsonContent.ingredients[i].Step;
+            }
+            else{
+              console.log("instructions steps")
+              jsonGood = false;
+            }
+          }
         }
       }
 
@@ -497,13 +622,13 @@ app.post("/generateRecipe", async (req, res)=>{
       console.log(`Generate a recipe ${"relating to " + generatedRecipeQuery} based on ${JSON.stringify(currRecipe)} \n`)
       const content = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
-        messages: [{role: "system", content: `Based on a JSON info of a recipe generate a recipe return in the
-        JSON format {name: max 100 characters, duration: int minutes, cuisine: max 100 characters, notes: optional max 2000 characters, 
-        ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , unit: max 50 characters, notes: max 1000 characters}], 
-        instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] REQUIRED, include all necessary instructions to make dish (detailed)}}, 
-        all keys should be the same as example and be valid JSON, no fractions.  Only ever give JSON and use the exact same keys as the example (case-sensitive) and make
-        sure all fields are filled out and a proper new recipe is created with ingredients (can add more or remove), INSTRUCTIONS (REQUIRED), and other blank information`}, 
-        {role: "user", content: `Generate a recipe ${"relating to " + generatedRecipeQuery} based on ${JSON.stringify(currRecipe)}`}],
+        messages: [{role: "system", content: `Based on a JSON info of a recipe generate a recipe return in the JSON format {name: max 100 characters, duration: int minutes,
+        cuisine: max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
+        unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] 
+        REQUIRED, include all necessary instructions to make dish (detailed)}}, all keys should be the same as example and be valid JSON, no fractions.  
+        Only ever give JSON and use the exact same keys as the example (case-sensitive) and make sure all fields are filled out and a proper new recipe is created with 
+        ingredients (can add more or remove), INSTRUCTIONS (REQUIRED), and other blank information`}, 
+        {role: "user", content: `Generate a recipe ${generatedRecipeQuery} fill out this ${JSON.stringify(currRecipe)}`}],
       });
 
       // check if all the proper keys are present
@@ -563,6 +688,15 @@ app.post("/generateRecipe", async (req, res)=>{
               jsonGood = false;
             }
           }
+          if (!jsonContent.instructions[i].step){
+            if(jsonContent.ingredients[i].Step){
+              jsonContent.ingredients[i].step = jsonContent.ingredients[i].Step;
+            }
+            else{
+              console.log("instructions steps")
+              jsonGood = false;
+            }
+          }
         }
       }
 
@@ -583,3 +717,86 @@ app.post("/generateRecipe", async (req, res)=>{
     catch (error){console.log(error);}
   }
 })
+
+app.post("/scrapeVideo",  upload.single("file"), async (req, res)=>{
+  const recipeVideoLink = req.body.recipeVideoLink;
+  const recipeVideo = req.file;
+  let videoName;
+
+  if(recipeVideoLink){
+    videoName = count + '.mp3';
+    count += 1;
+    if (ytdl.validateURL(recipeVideoLink)) {
+      const stream = ytdl(recipeVideoLink,  {
+        filter: "audioonly",
+        fmt: "mp3",
+      })
+      const writeStream = fs.createWriteStream(videoName);
+      stream.pipe(writeStream)
+      writeStream.on('finish', async () => {
+        const formData = new FormData();
+        formData.append("model", "whisper-1");
+        formData.append("file", fs.createReadStream(videoName));
+
+        try {
+          const transcription = await openai.audio.transcriptions.create({
+            file: fs.createReadStream(videoName),
+            model: "whisper-1",
+          });
+        
+          console.log(transcription.text);
+        } catch (err) {
+          console.error("Error posting to OpenAI API:", err);
+        }
+      });
+
+      writeStream.on('error', (err) => {
+        console.error("Error writing to file:", err);
+      });
+      
+    } 
+    else {
+      console.log("Invalid YouTube URL");
+    }
+    unlink(videoName, (err) => {
+      if (err) throw err;
+      console.log(videoName + ' was deleted');
+    }); 
+  }
+  else{
+    videoName = count + '.mp4';
+    count += 1;
+    const writeStream = fs.createWriteStream(videoName);
+
+    const buffer = recipeVideo.buffer
+    const readable = new Readable()
+    readable._read = () => {} 
+    readable.push(buffer)
+    readable.push(null)
+    readable.pipe(writeStream)
+
+
+    writeStream.on('finish', async () => {
+      const formData = new FormData();
+      formData.append("model", "whisper-1");
+      formData.append("file", fs.createReadStream(videoName));
+
+      try {
+        const transcription = await openai.audio.transcriptions.create({
+          file: fs.createReadStream(videoName),
+          model: "whisper-1",
+        });
+      
+        console.log(transcription.text);
+        unlink(videoName, (err) => {
+          if (err) throw err;
+          console.log(videoName + ' was deleted');
+        }); 
+      } catch (err) {
+        console.error("Error posting to OpenAI API:", err);
+      }
+
+    });
+  }
+})
+

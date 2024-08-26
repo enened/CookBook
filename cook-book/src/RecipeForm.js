@@ -13,7 +13,7 @@ function RecipeForm(){
     let currentUrl = useLocation().pathname;
     const { recipeId } = useParams();
     const {user, setUser} = useContext(Context);
-    const [recipeLink, setRecipeLink] = useState("")
+    const [recipeWebscrapeLink, setRecipeWebscrapeLink] = useState("")
     const [name, setName] = useState("")
     const [notes, setNotes] = useState("")
     const [duration, setDuration] = useState()
@@ -26,6 +26,9 @@ function RecipeForm(){
     const [scrappingError, setScrappingError] = useState()
     const [generatedRecipeQuery, setGeneratedRecipeQuery] = useState("")
     const [generationLoading, setGenerationLoading] = useState(false)
+    const [recipeVideo, setRecipeVideo] = useState()
+    const [recipeVideoLink, setRecipeVideoLink] = useState()
+    const [videoScrapeLoading, setVideoScrapeLoading] = useState()
 
     const getNoParamURL = ()=>{
         for (let i = 1; i < currentUrl.length; i++) {
@@ -36,13 +39,13 @@ function RecipeForm(){
         return currentUrl
     }
 
-    const getRecipeInfo = ()=>{
-        Axios.post("http://localhost:30015/getRecipeInfo", {userId: user.userId, recipeId: recipeId}).then((response)=>{
+    const getRecipeInfo = (userId)=>{
+        Axios.post("http://localhost:30015/getRecipeInfo", {userId: userId, recipeId: recipeId}).then((response)=>{
             if (response.data == "Recipe not found"){
                 alert("Recipe not found")
                 navigate("/myRecipes")
             }
-            else if (response.data.recipeInfo.userId != user.userId){
+            else if (response.data.recipeInfo.userId != userId){
                 alert("You don't have access to this recipe.");
                 navigate("/myRecipes")
             }
@@ -60,20 +63,19 @@ function RecipeForm(){
     useEffect(()=>{
         if (!user.userId){
             checkLoggedIn(setUser).then((response)=>{
-                console.log(response)
                 if (!response){
                     navigate("/")
                 }
                 else{
                     if (getNoParamURL() == "/editRecipe"){
-                        getRecipeInfo()
+                        getRecipeInfo(response.userId)
                     }
                 }
             })  
         }
         else{
             if (getNoParamURL() == "/editRecipe"){
-                getRecipeInfo()
+                getRecipeInfo(user.userId)
             }
         }
     }, [])
@@ -146,7 +148,7 @@ function RecipeForm(){
         e.preventDefault();
         setScrappingError()
         setScrappingLoading(true);
-        Axios.post("http://localhost:30015/scrapeWebsite", {recipeLink: recipeLink}).then((response)=>{
+        Axios.post("http://localhost:30015/scrapeWebsite", {recipeLink: recipeWebscrapeLink}).then((response)=>{
             setScrappingLoading(false);
             if (response.data.recipe.error){
                 setScrappingError(response.data.recipe.error)
@@ -176,22 +178,75 @@ function RecipeForm(){
         })    
     }
 
+    const scrapeVideo = (e)=>{
+        e.preventDefault()
+        setVideoScrapeLoading(true)
+        let formData = new FormData();
+        formData.append('file', recipeVideo);
+        formData.append('recipeVideoLink', recipeVideoLink.trim());
+
+        Axios.post("http://localhost:30015/scrapeVideo", formData, {headers: {'Content-Type': 'multipart/form-data'}}).then((response)=>{
+            console.log(response)
+        })  
+    }
+
+
+    const getVideoLinkSource = (recipeVideoLink)=>{
+        let src = "https://www.youtube.com/embed/";
+        let searching = false;
+
+        for (let i = 0; i < recipeVideoLink.length; i++) {
+            if (recipeVideoLink[i] == "&"){
+                break
+            }
+            if (searching){
+                src += recipeVideoLink[i]
+            }
+            else if (recipeVideoLink[i] == "v"){
+                searching = true;
+                i += 1
+            }
+            
+        }
+        return src;
+    }
+    
+
     return(
       <>  
-
         {getNoParamURL() == "/createRecipe" && 
             <>
                 {/* Recipes from websites using input link */}
                 <form onSubmit={scrapeWebsite}>
-                    <p>Already have a recipe? Paste a link to it to automatically fill out recipe info!</p>
-                    <input type = "text" onChange={(e)=>{setRecipeLink(e.target.value)}} maxLength={1000} required placeholder="Recipe link" value={recipeLink}/>
+                    <p>Have a recipe online? Paste a link to it to automatically fill out recipe info!</p>
+                    <input type = "text" onChange={(e)=>{setRecipeWebscrapeLink(e.target.value)}} maxLength={1000} required placeholder="Recipe link" value={recipeWebscrapeLink}/>
                     <br/>
-                    <button type='submit'>Scrape</button>
+                    <button type='submit'>Scrape website</button>
                     {scrappingLoading && <p>...Loading info from website</p>}
                     {scrappingError && <p>An error occured while gathering info: {scrappingError}</p>}
                     <br/>
                 </form>
 
+                {/* Provide video  */}
+                <form onSubmit={scrapeVideo}>
+                    {/* AI to  generate recipe */}
+                    <p>Have a recipe video you want to scrape? Just upload it to automatically fill out recipe info!</p>
+                    {recipeVideo && <video controls className='videoPreview' src={URL.createObjectURL(recipeVideo)}></video>}
+                    {recipeVideoLink && <iframe allowFullScreen="allowFullScreen" src={getVideoLinkSource(recipeVideoLink)}></iframe>}
+                    {!recipeVideo && !recipeVideoLink && <p>No video uploaded yet</p>}
+                    <br/>
+                    <label htmlFor='files' className = "fileUpload">Upload video</label>
+                    <input onChange={(e)=>{setRecipeVideo(e.target.files[0]); setRecipeVideoLink("")}} type="file" id='files' accept="video/*"/>                    
+                    <br/>
+                    <p>Or</p>
+                    <input type="url" onChange={(e)=>{setRecipeVideoLink(e.target.value); setRecipeVideo()}} maxLength={1000} placeholder="Youtube link" value={recipeVideoLink}/>
+                    <br/>
+                    <button>Scrape video</button>
+                    {videoScrapeLoading && <p>...Loading info from video</p>}
+                </form>
+
+
+                {/* Generate new recipe using AI */}
                 <form onSubmit={generateRecipe}>
                     {/* AI to  generate recipe */}
                     <p>Need some help with your recipe? Just fill in any of the recipe fields below (ex. recipe name, ingredients, cuisine, etc) and use AI to automatically generate the rest!</p>
@@ -199,9 +254,11 @@ function RecipeForm(){
                     <br/>
                     <button>Generate recipe</button>
                     {generationLoading && <p>...Generating recipe</p>}
-                </form>
+                </form>    
             </>
         }
+
+        
 
         {/* All recipe info */}
         <h2>{name}</h2>

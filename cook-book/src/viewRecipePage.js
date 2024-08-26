@@ -11,6 +11,7 @@ function ViewRecipePage(){
     let navigate = useNavigate()
     const { recipeId } = useParams();
     const {user, setUser} = useContext(Context);
+    const [recipeUserId, setRecipeUserId] = useState()
     const [name, setName] = useState("")
     const [notes, setNotes] = useState("")
     const [duration, setDuration] = useState()
@@ -25,6 +26,7 @@ function ViewRecipePage(){
                 navigate("/home")
             }
             else{
+                setRecipeUserId(response.data.recipeInfo.userId)
                 setName(response.data.recipeInfo.name);
                 setNotes(response.data.recipeInfo.notes);
                 setDuration(response.data.recipeInfo.duration);
@@ -115,7 +117,7 @@ function ViewRecipePage(){
             </tbody>
         </table>
         
-        <button onClick={()=>{navigate("/editRecipe/" + recipeId)}}>Edit recipe</button>
+        {user.userId == recipeUserId && <button onClick={()=>{navigate("/editRecipe/" + recipeId)}}>Edit recipe</button>}
       </>
     )
 }

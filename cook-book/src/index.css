@@ -30,6 +30,19 @@ input, textarea{
   text-align: center;
 }
 
+input[type=file] {
+  display: none;
+}
+
+.fileUpload {
+  border: 1px solid #ccc;
+  display: inline-block;
+  padding: 6px 12px;
+  cursor: pointer;
+  width: 90%;
+  max-width: 300px;
+}
+
 button{
   border: none;
   background-color: rgb(82, 191, 144);
@@ -229,6 +242,10 @@ table{
   margin-bottom: 50px;
 }
 
+.videoPreview{
+  height: 300px;
+}
+
 
 /* styles for dark mode */
 
@@ -260,7 +277,7 @@ table{
     color: black
   }
 
-  .squareSlide, .smallSlide, .smallSlideDark, .ingredientSlide, .bigSlideOutline, th, td{
+  .squareSlide, .smallSlide, .smallSlideDark, .ingredientSlide, .instructionSlide, .bigSlideOutline, th, td{
     background-color: black;
     border: 1px solid rgb(57, 133, 100);
   }
@@ -270,6 +287,11 @@ table{
     color: black
   }
 
+  .item .dragHandle
+  {
+    background: url('grippyWhite.png') 30% 50% no-repeat no-repeat;
+
+  }
 }
 
 .smallSlideDark{
@@ -285,6 +307,8 @@ table{
   background-color: black;
   border: 1px solid rgb(57, 133, 100);
 }
+
+
 
 
 

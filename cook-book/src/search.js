@@ -12,6 +12,8 @@ function Search(){
     const {user, setUser} = useContext(Context);
     const [searchResults, setSearchResults] = useState([])
     const [currentRecipes, setCurrentRecipes] = useState([])
+    const [query, setQuery] = useState("")
+    const [loading, setLoading] = useState(false)
 
     useEffect(()=>{
         if (!user.userId){
@@ -39,9 +41,11 @@ function Search(){
 
     }, [searchResults])
 
-    const getSearchResults = (e)=>{
-        if (e.target.value.trim() != ""){
-            Axios.post("http://localhost:30015/getSearchResults", {userId: user.userId, query: e.target.value.trim()}).then((response) =>{
+    const getSearchResults = ()=>{
+        if (query.trim() != ""){
+            setLoading(true)
+            Axios.post("http://localhost:30015/getSearchResults", {userId: user.userId, query: query.trim()}).then((response) =>{
+                setLoading(false)
                 setSearchResults(response.data.recipes)
                 setCurrentRecipes(response.data.recipes)
             })  
@@ -58,11 +62,13 @@ function Search(){
 
         <FilterSlide setCurrentRecipes = {setCurrentRecipes} allRecipes={searchResults}/>
 
-        <input onChange={getSearchResults} type = "text" className='search' placeholder='Search using recipe names, notes, duration, or ingredients'/>
+        <input onChange={(e)=>{setQuery(e.target.value)}} type = "text" className='search' placeholder='Search using recipe names, notes, duration, or ingredients'/>
+        <button onClick={getSearchResults}>Search</button>
         <br/>
 
         <h3>Search results:</h3>
-        {currentRecipes.length == 0 && <p>No recipes found</p>}
+        {loading && <p>Loading...</p>}
+        {currentRecipes.length == 0 && !loading && <p>No recipes found</p>}
         
         <div className='flexCenter' style={{"flex-wrap": "wrap"}}>
             {currentRecipes.map((val)=>{
