@@ -14,8 +14,6 @@ const ytdl = require("@distube/ytdl-core");
 const fs = require('fs');
 const { Readable } = require('stream');
 const { unlink } = require('node:fs');
-// const { z } = require("zod");
-// const { zodResponseFormat } = require("openai/helpers/zod");
 
 const storage = multer.memoryStorage()
 const upload = multer({ storage: storage })
@@ -603,7 +601,7 @@ app.post("/scrapeWebsite", async (req, res)=>{
   }
 })
 
-// scrape website for recipe
+// generate a new recipe given query
 app.post("/generateRecipe", async (req, res)=>{
   const generatedRecipeQuery = req.body.generatedRecipeQuery;
   const currRecipe = req.body.currRecipe;
@@ -743,26 +741,33 @@ app.post("/scrapeVideo",  upload.single("file"), async (req, res)=>{
             file: fs.createReadStream(videoName),
             model: "whisper-1",
           });
-        
-          console.log(transcription.text);
-        } catch (err) {
+
+          unlink(videoName, (err) => {
+            if (err) throw err;
+            console.log(videoName + ' was deleted');
+          }); 
+
+          let recipe = await getRecipeFromTranscript(transcription.text);
+          console.log(recipe)
+          res.send(recipe);
+        } 
+        catch (err) {
           console.error("Error posting to OpenAI API:", err);
+          res.send({error: "Please try again later"})
         }
       });
 
       writeStream.on('error', (err) => {
         console.error("Error writing to file:", err);
+        res.send({error: "Please try again later"})
       });
       
     } 
     else {
-      console.log("Invalid YouTube URL");
+      res.send({error: "Invalid YouTube URL"})
     }
-    unlink(videoName, (err) => {
-      if (err) throw err;
-      console.log(videoName + ' was deleted');
-    }); 
   }
+
   else{
     videoName = count + '.mp4';
     count += 1;
@@ -787,16 +792,128 @@ app.post("/scrapeVideo",  upload.single("file"), async (req, res)=>{
           model: "whisper-1",
         });
       
-        console.log(transcription.text);
+        let recipe = await getRecipeFromTranscript(transcription.text);
+        console.log(recipe)
+        res.send(recipe);
+
         unlink(videoName, (err) => {
           if (err) throw err;
           console.log(videoName + ' was deleted');
         }); 
       } catch (err) {
-        console.error("Error posting to OpenAI API:", err);
+        console.log("Error posting to OpenAI API:", err);
+        res.send({error: "Please try again later"})
       }
-
     });
   }
 })
 
+async function  getRecipeFromTranscript (transcript) {
+  let tries = 0;
+
+  while (true){
+    console.log(tries)
+    tries += 1;
+    if (tries == 5){
+      return {"error":"Error generating recipe, please try again later"};
+    }
+    try{
+      let jsonGood = true;
+      // generate recipe
+      console.log(`Create a recipe JSON based on ${transcript}} \n`)
+      const content = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [{role: "system", content: `Based on a transcript of a recipe, format the recipe into the JSON format {name: max 100 characters, duration: int minutes,
+        cuisine: max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
+        unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] 
+        REQUIRED, include all necessary instructions to make dish (detailed)}}, all keys should be the same as example and be valid JSON, no fractions.  
+        Only ever give JSON and use the exact same keys as the example (case-sensitive). If there is a error return it in the format {error: errorMessage}. Make sure it is 
+        proper JSON and all keys conform to the examples.`}, 
+        {role: "user", content: `Create a recipe JSON based on ${transcript}}`}],
+      });
+
+      // check if all the proper keys are present
+      let jsonContent = JSON.parse(content.choices[0].message.content);
+      console.log(jsonContent)
+      if (!jsonContent.error && !jsonContent.Error){
+
+        if (!jsonContent.name){
+          if(jsonContent.Name){
+            jsonContent.name = jsonContent.Name;
+          }
+          else{
+            console.log("name")
+            continue;
+          }
+        }
+
+        if (!jsonContent.ingredients){
+          if(jsonContent.Ingredients){
+            jsonContent.ingredients = jsonContent.Ingredients;
+          }
+          else{
+            console.log("ingredients")
+            continue;
+          }
+        }
+
+        if (!jsonContent.instructions){
+          if(jsonContent.Instructions){
+            jsonContent.instructions = jsonContent.Instructions;
+          }
+          else{
+            console.log("instructions")
+            continue;
+          }
+        }
+
+        for (let i = 0; i < jsonContent.ingredients.length; i++) {
+          if (!jsonContent.ingredients[i].ingredientName){
+            if(jsonContent.ingredients[i].IngredientName){
+              jsonContent.ingredients[i].ingredientName = jsonContent.ingredients[i].IngredientName;
+            }
+            else{
+              console.log("ingredients ingredientName")
+              jsonGood = false;
+            }
+          }
+        }
+
+        for (let i = 0; i < jsonContent.instructions.length; i++) {
+          if (!jsonContent.instructions[i].instruction){
+            if(jsonContent.ingredients[i].Instruction){
+              jsonContent.ingredients[i].instruction = jsonContent.ingredients[i].Instruction;
+            }
+            else{
+              console.log("instructions instruction")
+              jsonGood = false;
+            }
+          }
+          if (!jsonContent.instructions[i].step){
+            if(jsonContent.ingredients[i].Step){
+              jsonContent.ingredients[i].step = jsonContent.ingredients[i].Step;
+            }
+            else{
+              console.log("instructions steps")
+              jsonGood = false;
+            }
+          }
+        }
+      }
+
+      else if(jsonContent.Error){
+        jsonContent.error = jsonContent.Error;
+      }
+      else if(!jsonContent.error){
+        console.log("error error")
+        continue;
+      }
+
+      // convert to json and send to front end
+      if(jsonGood){
+        return {recipe: jsonContent};
+      }
+    }
+    catch (error){console.log(error);}
+  }
+}

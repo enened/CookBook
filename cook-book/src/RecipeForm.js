@@ -23,7 +23,7 @@ function RecipeForm(){
     const [deletedInstructions, setDeletedInstructions] = useState([])
     const [deletedIngredients, setDeletedIngredients] = useState([])
     const [scrappingLoading, setScrappingLoading] = useState(false)
-    const [scrappingError, setScrappingError] = useState()
+    const [error, setError] = useState()
     const [generatedRecipeQuery, setGeneratedRecipeQuery] = useState("")
     const [generationLoading, setGenerationLoading] = useState(false)
     const [recipeVideo, setRecipeVideo] = useState()
@@ -146,12 +146,12 @@ function RecipeForm(){
 
     const scrapeWebsite = (e)=>{
         e.preventDefault();
-        setScrappingError()
+        setError()
         setScrappingLoading(true);
         Axios.post("http://localhost:30015/scrapeWebsite", {recipeLink: recipeWebscrapeLink}).then((response)=>{
             setScrappingLoading(false);
             if (response.data.recipe.error){
-                setScrappingError(response.data.recipe.error)
+                setError(response.data.recipe.error)
             }
             else{
                 setName(response.data.recipe.name);
@@ -169,12 +169,17 @@ function RecipeForm(){
         setGenerationLoading(true);
         Axios.post("http://localhost:30015/generateRecipe", {generatedRecipeQuery: generatedRecipeQuery, currRecipe: {name: name, notes: notes, duration: duration, cuisine: cuisine, ingredients: ingredients, instructions: instructions}}).then((response)=>{
             setGenerationLoading(false);
-            setName(response.data.recipe.name);
-            setNotes(response.data.recipe.notes);
-            setDuration(response.data.recipe.duration);
-            setCuisine(response.data.recipe.cuisine);
-            setIngredients(response.data.recipe.ingredients);
-            setInstructions(response.data.recipe.instructions);
+            if (response.data.recipe.error){
+                setError(response.data.recipe.error)
+            }
+            else{
+                setName(response.data.recipe.name);
+                setNotes(response.data.recipe.notes);
+                setDuration(response.data.recipe.duration);
+                setCuisine(response.data.recipe.cuisine);
+                setIngredients(response.data.recipe.ingredients);
+                setInstructions(response.data.recipe.instructions);
+            }
         })    
     }
 
@@ -186,10 +191,20 @@ function RecipeForm(){
         formData.append('recipeVideoLink', recipeVideoLink.trim());
 
         Axios.post("http://localhost:30015/scrapeVideo", formData, {headers: {'Content-Type': 'multipart/form-data'}}).then((response)=>{
-            console.log(response)
+            setVideoScrapeLoading(false);
+            if (response.data.recipe.error){
+                setError(response.data.recipe.error)
+            }
+            else{
+                setName(response.data.recipe.name);
+                setNotes(response.data.recipe.notes);
+                setDuration(response.data.recipe.duration);
+                setCuisine(response.data.recipe.cuisine);
+                setIngredients(response.data.recipe.ingredients);
+                setInstructions(response.data.recipe.instructions);
+            }        
         })  
     }
-
 
     const getVideoLinkSource = (recipeVideoLink)=>{
         let src = "https://www.youtube.com/embed/";
@@ -223,7 +238,6 @@ function RecipeForm(){
                     <br/>
                     <button type='submit'>Scrape website</button>
                     {scrappingLoading && <p>...Loading info from website</p>}
-                    {scrappingError && <p>An error occured while gathering info: {scrappingError}</p>}
                     <br/>
                 </form>
 
@@ -254,7 +268,9 @@ function RecipeForm(){
                     <br/>
                     <button>Generate recipe</button>
                     {generationLoading && <p>...Generating recipe</p>}
-                </form>    
+                </form>  
+
+                {error && <p>An error occured while gathering info: {error}</p>}
             </>
         }
 
