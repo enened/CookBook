@@ -7,6 +7,9 @@ const session = require("express-session");
 const cookieParser = require('cookie-parser');
 const axios = require("axios");
 const util = require('util');
+const { createWorker } = require('tesseract.js');
+
+
 const bcrypt = require("bcrypt");
 const saltRounds = 5;
 const multer = require('multer')
@@ -487,235 +490,38 @@ app.post("/deleteRecipe", (req, res)=>{
   })
 })
 
-// scrape website for recipe
+// Extract recipe from website 
 app.post("/scrapeWebsite", async (req, res)=>{
   const recipeLink = req.body.recipeLink;
-  let tries = 0;
-  
-  while (true){
-    console.log(tries)
-    tries += 1;
-    if (tries == 5){
-      res.send({"error":"Error generating recipe, please try again later"});
-      break;
-    }
-    try{
-      let jsonGood = true;
-      // get recipe info from website
-      const content = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{role: "system", content: `Search a website for recipe info and return the info in the JSON format {name: max 100 characters, duration: int minutes, cuisine: 
-        max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
-        unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}]}}, 
-        all keys should be the same as example and be valid JSON, no fractions. If there is no recipe info in the website, or you cannot get complete recipe 
-        information, return the error message in the JSON format {error: shortErrorMessage}. 
-        Only ever give JSON and use the exact same keys as the example (case-sensitive)`}, 
-        {role: "user", content: `Give recipe information from ${recipeLink}`}],
-      });
 
-      // check if all the proper keys are present
-      let jsonContent = JSON.parse(content.choices[0].message.content);
-      console.log(jsonContent)
-      if (!jsonContent.error && !jsonContent.Error){
+  let recipe = await getAIRecipe(`Search a website for recipe info and return the info in the JSON format {name: max 100 characters, duration: int minutes, cuisine: 
+  max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
+  unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}]}}, 
+  all keys should be the same as example and be valid JSON, no fractions. If there is no recipe info in the website, or you cannot get complete recipe 
+  information, return the error message in the JSON format {error: shortErrorMessage}. 
+  Only ever give JSON and use the exact same keys as the example (case-sensitive)`, 
+  `Give recipe information from ${recipeLink}`);
 
-        if (!jsonContent.name){
-          if(jsonContent.Name){
-            jsonContent.name = jsonContent.Name;
-          }
-          else{
-            console.log("name")
-            continue;
-          }
-        }
-
-        if (!jsonContent.ingredients){
-          if(jsonContent.Ingredients){
-            jsonContent.ingredients = jsonContent.Ingredients;
-          }
-          else{
-            console.log("ingredients")
-            continue;
-          }
-        }
-
-        if (!jsonContent.instructions){
-          if(jsonContent.Instructions){
-            jsonContent.instructions = jsonContent.Instructions;
-          }
-          else{
-            console.log("instructions")
-            continue;
-          }
-        }
-
-        for (let i = 0; i < jsonContent.ingredients.length; i++) {
-          if (!jsonContent.ingredients[i].ingredientName){
-            if(jsonContent.ingredients[i].IngredientName){
-              jsonContent.ingredients[i].ingredientName = jsonContent.ingredients[i].IngredientName;
-            }
-            else{
-              console.log("ingredients ingredientName")
-              jsonGood = false;
-            }
-          }
-        }
-
-        for (let i = 0; i < jsonContent.instructions.length; i++) {
-          if (!jsonContent.instructions[i].instruction){
-            if(jsonContent.ingredients[i].Instruction){
-              jsonContent.ingredients[i].instruction = jsonContent.ingredients[i].Instruction;
-            }
-            else{
-              console.log("instructions instruction")
-              jsonGood = false;
-            }
-          }
-
-          if (!jsonContent.instructions[i].step){
-            if(jsonContent.ingredients[i].Step){
-              jsonContent.ingredients[i].step = jsonContent.ingredients[i].Step;
-            }
-            else{
-              console.log("instructions steps")
-              jsonGood = false;
-            }
-          }
-        }
-      }
-
-      else if(jsonContent.Error){
-        jsonContent.error = jsonContent.Error;
-      }
-      else if(!jsonContent.error){
-        console.log("error error")
-        continue;
-      }
-
-      // convert to json and send to front end
-      if(jsonGood){
-        res.send({recipe: jsonContent});
-        break;
-      }
-    }
-    catch (error){console.log(error);}
-  }
+  res.send(recipe);
 })
 
 // generate a new recipe given query
 app.post("/generateRecipe", async (req, res)=>{
   const generatedRecipeQuery = req.body.generatedRecipeQuery;
   const currRecipe = req.body.currRecipe;
-  let tries = 0;
 
-  while (true){
-    console.log(tries)
-    tries += 1;
-    if (tries == 5){
-      res.send({"error":"Error generating recipe, please try again later"});
-      break;
-    }
-    try{
-      let jsonGood = true;
-      // generate recipe
-      console.log(`Generate a recipe ${"relating to " + generatedRecipeQuery} based on ${JSON.stringify(currRecipe)} \n`)
-      const content = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [{role: "system", content: `Based on a JSON info of a recipe generate a recipe return in the JSON format {name: max 100 characters, duration: int minutes,
-        cuisine: max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
-        unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] 
-        REQUIRED, include all necessary instructions to make dish (detailed)}}, all keys should be the same as example and be valid JSON, no fractions.  
-        Only ever give JSON and use the exact same keys as the example (case-sensitive) and make sure all fields are filled out and a proper new recipe is created with 
-        ingredients (can add more or remove), INSTRUCTIONS (REQUIRED), and other blank information`}, 
-        {role: "user", content: `Generate a recipe ${generatedRecipeQuery} fill out this ${JSON.stringify(currRecipe)}`}],
-      });
+  let recipe = await getAIRecipe(`Based on a JSON info of a recipe generate a recipe return in the JSON format {name: max 100 characters, duration: int minutes,
+  cuisine: max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
+  unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] 
+  REQUIRED, include all necessary instructions to make dish (detailed)}}, all keys should be the same as example and be valid JSON, no fractions.  
+  Only ever give JSON and use the exact same keys as the example (case-sensitive) and make sure all fields are filled out and a proper new recipe is created with 
+  ingredients (can add more or remove), INSTRUCTIONS (REQUIRED), and other blank information`, 
+  `Generate a recipe ${generatedRecipeQuery} fill out this ${JSON.stringify(currRecipe)}`);
 
-      // check if all the proper keys are present
-      let jsonContent = JSON.parse(content.choices[0].message.content);
-      console.log(jsonContent)
-      if (!jsonContent.error && !jsonContent.Error){
-
-        if (!jsonContent.name){
-          if(jsonContent.Name){
-            jsonContent.name = jsonContent.Name;
-          }
-          else{
-            console.log("name")
-            continue;
-          }
-        }
-
-        if (!jsonContent.ingredients){
-          if(jsonContent.Ingredients){
-            jsonContent.ingredients = jsonContent.Ingredients;
-          }
-          else{
-            console.log("ingredients")
-            continue;
-          }
-        }
-
-        if (!jsonContent.instructions){
-          if(jsonContent.Instructions){
-            jsonContent.instructions = jsonContent.Instructions;
-          }
-          else{
-            console.log("instructions")
-            continue;
-          }
-        }
-
-        for (let i = 0; i < jsonContent.ingredients.length; i++) {
-          if (!jsonContent.ingredients[i].ingredientName){
-            if(jsonContent.ingredients[i].IngredientName){
-              jsonContent.ingredients[i].ingredientName = jsonContent.ingredients[i].IngredientName;
-            }
-            else{
-              console.log("ingredients ingredientName")
-              jsonGood = false;
-            }
-          }
-        }
-
-        for (let i = 0; i < jsonContent.instructions.length; i++) {
-          if (!jsonContent.instructions[i].instruction){
-            if(jsonContent.ingredients[i].Instruction){
-              jsonContent.ingredients[i].instruction = jsonContent.ingredients[i].Instruction;
-            }
-            else{
-              console.log("instructions instruction")
-              jsonGood = false;
-            }
-          }
-          if (!jsonContent.instructions[i].step){
-            if(jsonContent.ingredients[i].Step){
-              jsonContent.ingredients[i].step = jsonContent.ingredients[i].Step;
-            }
-            else{
-              console.log("instructions steps")
-              jsonGood = false;
-            }
-          }
-        }
-      }
-
-      else if(jsonContent.Error){
-        jsonContent.error = jsonContent.Error;
-      }
-      else if(!jsonContent.error){
-        console.log("error error")
-        continue;
-      }
-
-      // convert to json and send to front end
-      if(jsonGood){
-        res.send({recipe: jsonContent});
-        break;
-      }
-    }
-    catch (error){console.log(error);}
-  }
+  res.send(recipe);
 })
 
+// Extract recipe from videos (local file or youtube)
 app.post("/scrapeVideo",  upload.single("file"), async (req, res)=>{
   const recipeVideoLink = req.body.recipeVideoLink;
   const recipeVideo = req.file;
@@ -747,7 +553,12 @@ app.post("/scrapeVideo",  upload.single("file"), async (req, res)=>{
             console.log(videoName + ' was deleted');
           }); 
 
-          let recipe = await getRecipeFromTranscript(transcription.text);
+          let recipe = await getAIRecipe(`Based on a transcript of a recipe, format the recipe into the JSON format {name: max 100 characters, duration: int minutes,
+          cuisine: max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
+          unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number, REQUIRED}] 
+          REQUIRED, include all necessary instructions to make dish (detailed)}}, all keys should be the same as example and be valid JSON, no fractions.  
+          Only ever give JSON and use the exact same keys as the example (case-sensitive). If there is a error return it in the format {error: errorMessage}. Make sure it is 
+          proper JSON and all keys conform to the examples.`, `Create a recipe JSON based on ${transcription.text}}`);
           console.log(recipe)
           res.send(recipe);
         } 
@@ -792,7 +603,12 @@ app.post("/scrapeVideo",  upload.single("file"), async (req, res)=>{
           model: "whisper-1",
         });
       
-        let recipe = await getRecipeFromTranscript(transcription.text);
+        let recipe = await getAIRecipe(`Based on a transcript of a recipe, format the recipe into the JSON format {name: max 100 characters, duration: int minutes,
+          cuisine: max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
+          unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number, REQUIRED}] 
+          REQUIRED, include all necessary instructions to make dish (detailed)}}, all keys should be the same as example and be valid JSON, no fractions.  
+          Only ever give JSON and use the exact same keys as the example (case-sensitive). If there is a error return it in the format {error: errorMessage}. Make sure it is 
+          proper JSON and all keys conform to the examples.`, `Create a recipe JSON based on ${transcription.text}}`);
         console.log(recipe)
         res.send(recipe);
 
@@ -808,7 +624,32 @@ app.post("/scrapeVideo",  upload.single("file"), async (req, res)=>{
   }
 })
 
-async function  getRecipeFromTranscript (transcript) {
+// Extract recipe from images
+app.post("/scrapeImage",  upload.single("file"), async (req, res)=>{
+  const image = req.file;
+  (async () => {
+    const worker = await createWorker('eng', 1, {
+      logger: m => {} // track progress
+    });
+
+    const { data: { text } } = await worker.recognize(image.buffer);
+    await worker.terminate();
+    console.log(text); 
+    
+    let recipe = await getAIRecipe(`Based on instructions for a recipe, format the recipe into the JSON format {name: max 100 characters, duration: int minutes,
+    cuisine: max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
+    unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number, REQUIRED}] 
+    REQUIRED, include all necessary instructions to make dish (detailed)}}, all keys should be the same as example and be valid JSON, no fractions.  
+    Only ever give JSON and use the exact same keys as the example (case-sensitive). Ignore all irrelevant information and fill in any incomplete information.
+    For example, if the instructions include ingredients not listed in the ingredients section, still add it. Make sure the recipe is coherent.
+    If there is a error return it in the format {error: errorMessage}. Make sure it is proper JSON and all keys conform to the examples.`, 
+    `Create a recipe JSON based on ${text}}`);
+    res.send(recipe);
+  })();
+})
+
+// get recipe from chatGPT and validate output given system instructions and user query
+async function getAIRecipe (system, user) {
   let tries = 0;
 
   while (true){
@@ -819,22 +660,19 @@ async function  getRecipeFromTranscript (transcript) {
     }
     try{
       let jsonGood = true;
+
       // generate recipe
-      console.log(`Create a recipe JSON based on ${transcript}} \n`)
+      console.log(user)
       const content = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
-        messages: [{role: "system", content: `Based on a transcript of a recipe, format the recipe into the JSON format {name: max 100 characters, duration: int minutes,
-        cuisine: max 100 characters, notes: optional max 2000 characters, ingredients: [{ingredientName: max 500 characters, amount: no fractions only decimal(20,2) , 
-        unit: max 50 characters, notes: max 1000 characters}], instructions: [{instruction: max 5000 characters, notes: max 2000 characters, step: instruction step number}] 
-        REQUIRED, include all necessary instructions to make dish (detailed)}}, all keys should be the same as example and be valid JSON, no fractions.  
-        Only ever give JSON and use the exact same keys as the example (case-sensitive). If there is a error return it in the format {error: errorMessage}. Make sure it is 
-        proper JSON and all keys conform to the examples.`}, 
-        {role: "user", content: `Create a recipe JSON based on ${transcript}}`}],
+        messages: [{role: "system", content: system}, 
+        {role: "user", content: user}],
       });
 
       // check if all the proper keys are present
       let jsonContent = JSON.parse(content.choices[0].message.content);
       console.log(jsonContent)
+
       if (!jsonContent.error && !jsonContent.Error){
 
         if (!jsonContent.name){
@@ -894,8 +732,7 @@ async function  getRecipeFromTranscript (transcript) {
               jsonContent.ingredients[i].step = jsonContent.ingredients[i].Step;
             }
             else{
-              console.log("instructions steps")
-              jsonGood = false;
+              jsonContent.instructions[i].step = i + 1;
             }
           }
         }
@@ -909,7 +746,7 @@ async function  getRecipeFromTranscript (transcript) {
         continue;
       }
 
-      // convert to json and send to front end
+      // convert to json and return
       if(jsonGood){
         return {recipe: jsonContent};
       }
