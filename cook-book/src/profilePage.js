@@ -70,6 +70,7 @@ function ProfilePage(){
     return(
       <>  
         <h2>{user && user.username}'s profile</h2>
+        {user.password && 
         <form onSubmit={changePassword}>
             <h3>Change password: </h3>
             <input required onChange={(e)=>{setCurrentPass(e.target.value)}} type='password' placeholder='Current password'/>
@@ -79,17 +80,16 @@ function ProfilePage(){
             <input required onChange={(e)=>{setConfirmNewPass(e.target.value)}} type='password' placeholder='Confirm new password'/>
             <br/>
             <button>Change</button>
+        </form>}
 
-            <h3>Display: </h3>
-            <Select
-                className='dropdown'
-                placeholder = "Select display"
-                onChange={updateDisplay}
-                options={[{value: "light", label: "Light mode"}, {value: "dark", label: "Dark mode"}]}
-                value={display}
-            />
-            
-        </form>
+        <h3>Display: </h3>
+        <Select
+            className='dropdown'
+            placeholder = "Select display"
+            onChange={updateDisplay}
+            options={[{value: "light", label: "Light mode"}, {value: "dark", label: "Dark mode"}]}
+            value={display}
+        />
       </>
     )
 }
