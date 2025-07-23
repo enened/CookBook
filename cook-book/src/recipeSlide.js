@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import DeleteButton from "./deleteButton.png";
 import Popup from 'reactjs-popup';
-import { useContext, useEffect, useState } from 'react';
+import { useContext } from 'react';
 import {Context} from "./context.js";
 
 import  Axios  from 'axios';

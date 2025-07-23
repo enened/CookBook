@@ -8,7 +8,7 @@ const cookieParser = require('cookie-parser');
 const axios = require("axios");
 const util = require('util');
 const { createWorker } = require('tesseract.js');
-
+require('dotenv').config()
 
 const bcrypt = require("bcrypt");
 const saltRounds = 5;
@@ -20,16 +20,16 @@ const { unlink } = require('node:fs');
 
 const storage = multer.memoryStorage()
 const upload = multer({ storage: storage })
-const apiKey = ""        
+const apiKey = process.env.API_KEY       
 const OpenAI  = require('openai');
 const openai = new OpenAI({apiKey: apiKey});
 let count = 0;
 
 // database connection
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'password',
+  host: process.env.DB_HOST,
+  user:  process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   database: 'cookbook'
 });
 
